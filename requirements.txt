@@ -4,3 +4,4 @@ numpy
 scikit-learn
 xgboost
 matplotlib==3.7.1
+plotly
