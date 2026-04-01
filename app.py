@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 # ======================
 # CONFIG
 # ======================
-st.set_page_config(page_title="BigMart AI System", layout="wide")
+st.set_page_config(page_title="BigMart AI", layout="wide")
 
 # ======================
-# HASH FUNCTION
+# HASH
 # ======================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -53,43 +53,21 @@ model = pickle.load(open('model.pkl', 'rb'))
 data = pd.read_csv('Train.csv')
 
 # ======================
-# 🎨 UI STYLE
+# STYLE
 # ======================
 st.markdown("""
 <style>
-.stApp { background: linear-gradient(to right,#eef2f3,#ffffff); }
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: white;
-}
-
-/* Titles */
-h1,h2,h3 { color:#0d47a1; }
-
-/* Cards */
+.stApp { background: #f5f7fb; }
 .card {
     background:white;
     padding:20px;
     border-radius:15px;
-    box-shadow:0 8px 20px rgba(0,0,0,0.08);
-    transition:0.3s;
+    box-shadow:0 5px 15px rgba(0,0,0,0.08);
 }
-.card:hover { transform: scale(1.05); }
-
-/* Buttons */
 .stButton>button {
     background: linear-gradient(to right,#ff512f,#dd2476);
     color:white;
     border-radius:10px;
-    height:45px;
-    font-weight:bold;
-}
-
-/* Animation */
-@keyframes fadeIn {
-    from {opacity:0;}
-    to {opacity:1;}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -102,16 +80,16 @@ if "user" not in st.session_state:
     st.session_state.role = None
 
 # ======================
-# AUTH FUNCTIONS
+# AUTH
 # ======================
 def register_user(username, password, role):
-    hashed = hash_password(password)
-    c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed, role))
+    c.execute("INSERT INTO users VALUES (?, ?, ?)",
+              (username, hash_password(password), role))
     conn.commit()
 
 def login_user(username, password):
-    hashed = hash_password(password)
-    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed))
+    c.execute("SELECT * FROM users WHERE username=? AND password=?",
+              (username, hash_password(password)))
     return c.fetchone()
 
 # ======================
@@ -119,7 +97,7 @@ def login_user(username, password):
 # ======================
 if st.session_state.user is None:
 
-    st.markdown("<h1 style='text-align:center;'>🔐 BigMart AI Login</h1>", unsafe_allow_html=True)
+    st.title("🔐 BigMart Login")
 
     menu = st.radio("", ["Login", "Register"], horizontal=True)
 
@@ -128,16 +106,12 @@ if st.session_state.user is None:
 
     if menu == "Register":
         role = st.selectbox("Role", ["user", "admin"])
-
         if st.button("Register"):
-            if len(password) < 4:
-                st.warning("Password must be at least 4 characters")
-            else:
-                try:
-                    register_user(username, password, role)
-                    st.success("Account created!")
-                except:
-                    st.error("Username already exists")
+            try:
+                register_user(username, password, role)
+                st.success("Registered!")
+            except:
+                st.error("User exists")
 
     else:
         if st.button("Login"):
@@ -150,10 +124,9 @@ if st.session_state.user is None:
                           (username, str(datetime.now())))
                 conn.commit()
 
-                st.success("Login successful")
                 st.rerun()
             else:
-                st.error("Invalid credentials")
+                st.error("Invalid login")
 
 # ======================
 # MAIN APP
@@ -174,28 +147,15 @@ else:
     page = st.sidebar.radio("Navigation", pages)
 
     # ======================
-    # 🏠 HOME
+    # HOME
     # ======================
     if page == "Home":
-
-        st.markdown("<h1 style='text-align:center;'>🛒 BigMart AI Platform</h1>", unsafe_allow_html=True)
-
+        st.title("🛒 BigMart AI System")
         st.image("https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif")
-
-        st.markdown("## 📌 About")
-        st.write("""
-        This system predicts retail sales using Machine Learning. It helps businesses 
-        optimize pricing, inventory, and decision-making.
-        """)
-
-        col1, col2, col3 = st.columns(3)
-
-        col1.markdown("<div class='card'><h3>📊 Analytics</h3></div>", unsafe_allow_html=True)
-        col2.markdown("<div class='card'><h3>🤖 Prediction</h3></div>", unsafe_allow_html=True)
-        col3.markdown("<div class='card'><h3>🔐 Secure</h3></div>", unsafe_allow_html=True)
+        st.write("Smart Retail Prediction System using Machine Learning.")
 
     # ======================
-    # DASHBOARD
+    # DASHBOARD (FIXED)
     # ======================
     elif page == "Dashboard":
 
@@ -207,9 +167,16 @@ else:
         col2.metric("Avg Sales", f"₹ {data['Item_Outlet_Sales'].mean():.0f}")
         col3.metric("Max Sales", f"₹ {data['Item_Outlet_Sales'].max():.0f}")
 
-        fig, ax = plt.subplots()
-        ax.hist(data['Item_Outlet_Sales'], bins=30)
+        st.subheader("Sales Distribution")
+
+        # ✅ FIXED SAFE PLOT
+        fig = plt.figure()
+        plt.hist(data['Item_Outlet_Sales'], bins=30)
+        plt.xlabel("Sales")
+        plt.ylabel("Count")
+
         st.pyplot(fig)
+        plt.close(fig)  # 🔥 VERY IMPORTANT FIX
 
     # ======================
     # PREDICTION
@@ -218,30 +185,25 @@ else:
 
         st.title("🤖 Prediction")
 
-        item_weight = st.slider("Weight", 0.0, 25.0, 10.0)
-        item_visibility = st.slider("Visibility", 0.0, 0.5, 0.1)
-        item_mrp = st.slider("MRP", 50.0, 300.0, 150.0)
+        weight = st.slider("Weight", 0.0, 25.0, 10.0)
+        visibility = st.slider("Visibility", 0.0, 0.5, 0.1)
+        mrp = st.slider("MRP", 50.0, 300.0, 150.0)
 
         if st.button("Predict"):
-            with st.spinner("Processing..."):
-                time.sleep(1)
 
-                input_data = np.array([[0,item_weight,0,item_visibility,0,item_mrp,0,2000,0,0,0]])
-                prediction = model.predict(input_data)[0]
+            input_data = np.array([[0,weight,0,visibility,0,mrp,0,2000,0,0,0]])
+            pred = model.predict(input_data)[0]
 
-                c.execute("INSERT INTO predictions VALUES (?, ?, ?, ?, ?)",
-                          (st.session_state.user, item_mrp, item_weight,
-                           prediction, str(datetime.now())))
-                conn.commit()
+            c.execute("INSERT INTO predictions VALUES (?, ?, ?, ?, ?)",
+                      (st.session_state.user, mrp, weight, pred, str(datetime.now())))
+            conn.commit()
 
-                st.success(f"💰 ₹ {prediction:.2f}")
+            st.success(f"💰 ₹ {pred:.2f}")
 
     # ======================
     # HISTORY
     # ======================
     elif page == "History":
-
-        st.title("📜 History")
 
         df = pd.read_sql(f"SELECT * FROM predictions WHERE username='{st.session_state.user}'", conn)
         st.dataframe(df)
@@ -253,7 +215,7 @@ else:
 
         st.title("👨‍💼 Admin Panel")
 
-        tab1, tab2, tab3 = st.tabs(["Users","Predictions","Logins"])
+        tab1, tab2, tab3 = st.tabs(["Users","Predictions","Logs"])
 
         with tab1:
             st.dataframe(pd.read_sql("SELECT * FROM users", conn))
