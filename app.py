@@ -3,15 +3,37 @@ import sqlite3
 import pickle
 import numpy as np
 import pandas as pd
-import time
 import hashlib
 from datetime import datetime
-import matplotlib.pyplot as plt
+import plotly.express as px
+import time
 
 # ======================
 # CONFIG
 # ======================
-st.set_page_config(page_title="BigMart AI", layout="wide")
+st.set_page_config(page_title="BigMart SaaS", layout="wide")
+
+# ======================
+# LOADING SCREEN
+# ======================
+if "loaded" not in st.session_state:
+    st.session_state.loaded = False
+
+if not st.session_state.loaded:
+    st.markdown("""
+    <div style='text-align:center; padding-top:150px;'>
+        <h1>🚀 BigMart AI</h1>
+        <p>Loading Smart Retail Intelligence...</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.progress(0)
+    for i in range(100):
+        time.sleep(0.01)
+        st.progress(i+1)
+
+    st.session_state.loaded = True
+    st.rerun()
 
 # ======================
 # HASH
@@ -47,27 +69,66 @@ c.execute("""CREATE TABLE IF NOT EXISTS login_logs(
 conn.commit()
 
 # ======================
-# LOAD MODEL + DATA
+# LOAD DATA
 # ======================
 model = pickle.load(open('model.pkl', 'rb'))
 data = pd.read_csv('Train.csv')
 
 # ======================
-# STYLE
+# 🎨 PREMIUM UI
 # ======================
 st.markdown("""
 <style>
-.stApp { background: #f5f7fb; }
-.card {
-    background:white;
-    padding:20px;
-    border-radius:15px;
-    box-shadow:0 5px 15px rgba(0,0,0,0.08);
+
+/* Background */
+.stApp {
+    background: linear-gradient(135deg, #eef2ff, #f8fafc);
 }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #0f172a;
+}
+[data-testid="stSidebar"] * {
+    color: white !important;
+}
+
+/* Logo */
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+    padding: 10px;
+}
+
+/* Cards */
+.card {
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(12px);
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    transition: 0.3s;
+}
+.card:hover {
+    transform: translateY(-5px);
+}
+
+/* Buttons */
 .stButton>button {
-    background: linear-gradient(to right,#ff512f,#dd2476);
+    background: linear-gradient(to right,#6366f1,#8b5cf6);
     color:white;
-    border-radius:10px;
+    border-radius:12px;
+    height:45px;
+    font-weight:bold;
+}
+
+/* Animation */
+.fade {
+    animation: fadeIn 1s ease-in;
+}
+@keyframes fadeIn {
+    from {opacity:0;}
+    to {opacity:1;}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -97,24 +158,24 @@ def login_user(username, password):
 # ======================
 if st.session_state.user is None:
 
-    st.title("🔐 BigMart Login")
+    st.markdown("<h1 style='text-align:center;'>🚀 BigMart SaaS Platform</h1>", unsafe_allow_html=True)
 
     menu = st.radio("", ["Login", "Register"], horizontal=True)
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    username = st.text_input("👤 Username")
+    password = st.text_input("🔒 Password", type="password")
 
     if menu == "Register":
         role = st.selectbox("Role", ["user", "admin"])
-        if st.button("Register"):
+        if st.button("Create Account 🚀"):
             try:
                 register_user(username, password, role)
-                st.success("Registered!")
+                st.success("Account created!")
             except:
-                st.error("User exists")
+                st.error("Username exists")
 
     else:
-        if st.button("Login"):
+        if st.button("Login 🔐"):
             user = login_user(username, password)
             if user:
                 st.session_state.user = username
@@ -126,71 +187,59 @@ if st.session_state.user is None:
 
                 st.rerun()
             else:
-                st.error("Invalid login")
+                st.error("Invalid credentials")
 
 # ======================
 # MAIN APP
 # ======================
 else:
 
+    # Sidebar branding
+    st.sidebar.markdown("<div class='logo'>🛒 BigMart</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("---")
     st.sidebar.write(f"👤 {st.session_state.user}")
-    st.sidebar.write(f"Role: {st.session_state.role}")
+    st.sidebar.write(f"🛡 {st.session_state.role}")
 
-    if st.sidebar.button("Logout"):
+    if st.sidebar.button("🚪 Logout"):
         st.session_state.user = None
         st.rerun()
 
-    pages = ["Home", "Dashboard", "Prediction", "History"]
+    pages = ["🏠 Home", "📊 Dashboard", "🤖 Prediction", "📜 History"]
     if st.session_state.role == "admin":
-        pages.append("Admin Panel")
+        pages.append("👨‍💼 Admin")
 
     page = st.sidebar.radio("Navigation", pages)
 
-    # ======================
     # HOME
-    # ======================
-    if page == "Home":
-        st.title("🛒 BigMart AI System")
+    if page == "🏠 Home":
+        st.markdown("<h1 class='fade'>🚀 Welcome to BigMart SaaS</h1>", unsafe_allow_html=True)
+        st.write("AI-powered retail intelligence platform.")
         st.image("https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif")
-        st.write("Smart Retail Prediction System using Machine Learning.")
 
-    # ======================
-    # DASHBOARD (FIXED)
-    # ======================
-    elif page == "Dashboard":
+    # DASHBOARD
+    elif page == "📊 Dashboard":
 
-        st.title("📊 Dashboard")
+        st.markdown("<h2 class='fade'>📊 Dashboard</h2>", unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("Records", len(data))
-        col2.metric("Avg Sales", f"₹ {data['Item_Outlet_Sales'].mean():.0f}")
-        col3.metric("Max Sales", f"₹ {data['Item_Outlet_Sales'].max():.0f}")
+        col1.markdown(f"<div class='card'><h4>📦 Records</h4><h2>{len(data)}</h2></div>", unsafe_allow_html=True)
+        col2.markdown(f"<div class='card'><h4>📈 Avg Sales</h4><h2>₹ {data['Item_Outlet_Sales'].mean():.0f}</h2></div>", unsafe_allow_html=True)
+        col3.markdown(f"<div class='card'><h4>💰 Max Sales</h4><h2>₹ {data['Item_Outlet_Sales'].max():.0f}</h2></div>", unsafe_allow_html=True)
 
-        st.subheader("Sales Distribution")
+        fig = px.histogram(data, x="Item_Outlet_Sales", nbins=40)
+        st.plotly_chart(fig, use_container_width=True)
 
-        # ✅ FIXED SAFE PLOT
-        fig = plt.figure()
-        plt.hist(data['Item_Outlet_Sales'], bins=30)
-        plt.xlabel("Sales")
-        plt.ylabel("Count")
-
-        st.pyplot(fig)
-        plt.close(fig)  # 🔥 VERY IMPORTANT FIX
-
-    # ======================
     # PREDICTION
-    # ======================
-    elif page == "Prediction":
+    elif page == "🤖 Prediction":
 
-        st.title("🤖 Prediction")
+        st.markdown("<h2 class='fade'>🤖 Prediction Engine</h2>", unsafe_allow_html=True)
 
-        weight = st.slider("Weight", 0.0, 25.0, 10.0)
-        visibility = st.slider("Visibility", 0.0, 0.5, 0.1)
-        mrp = st.slider("MRP", 50.0, 300.0, 150.0)
+        weight = st.slider("⚖ Weight", 0.0, 25.0, 10.0)
+        visibility = st.slider("👁 Visibility", 0.0, 0.5, 0.1)
+        mrp = st.slider("💰 MRP", 50.0, 300.0, 150.0)
 
-        if st.button("Predict"):
-
+        if st.button("🚀 Predict"):
             input_data = np.array([[0,weight,0,visibility,0,mrp,0,2000,0,0,0]])
             pred = model.predict(input_data)[0]
 
@@ -198,23 +247,15 @@ else:
                       (st.session_state.user, mrp, weight, pred, str(datetime.now())))
             conn.commit()
 
-            st.success(f"💰 ₹ {pred:.2f}")
+            st.success(f"💰 Predicted Sales: ₹ {pred:.2f}")
 
-    # ======================
     # HISTORY
-    # ======================
-    elif page == "History":
-
+    elif page == "📜 History":
         df = pd.read_sql(f"SELECT * FROM predictions WHERE username='{st.session_state.user}'", conn)
-        st.dataframe(df)
+        st.dataframe(df, use_container_width=True)
 
-    # ======================
-    # ADMIN PANEL
-    # ======================
-    elif page == "Admin Panel":
-
-        st.title("👨‍💼 Admin Panel")
-
+    # ADMIN
+    elif page == "👨‍💼 Admin":
         tab1, tab2, tab3 = st.tabs(["Users","Predictions","Logs"])
 
         with tab1:
@@ -225,3 +266,5 @@ else:
 
         with tab3:
             st.dataframe(pd.read_sql("SELECT * FROM login_logs", conn))
+
+ 
