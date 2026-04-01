@@ -1,118 +1,265 @@
 import streamlit as st
-import pandas as pd
+import sqlite3
+import pickle
 import numpy as np
+import pandas as pd
+import time
+import hashlib
+from datetime import datetime
 import matplotlib.pyplot as plt
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="BigMart AI System",
-    page_icon="🛒",
-    layout="wide"
-)
+# ======================
+# CONFIG
+# ======================
+st.set_page_config(page_title="BigMart AI System", layout="wide")
 
-# ---------------- CUSTOM CSS ----------------
+# ======================
+# HASH FUNCTION
+# ======================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ======================
+# DATABASE
+# ======================
+conn = sqlite3.connect("database.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute("""CREATE TABLE IF NOT EXISTS users(
+    username TEXT UNIQUE,
+    password TEXT,
+    role TEXT
+)""")
+
+c.execute("""CREATE TABLE IF NOT EXISTS predictions(
+    username TEXT,
+    item_mrp REAL,
+    item_weight REAL,
+    prediction REAL,
+    timestamp TEXT
+)""")
+
+c.execute("""CREATE TABLE IF NOT EXISTS login_logs(
+    username TEXT,
+    login_time TEXT
+)""")
+
+conn.commit()
+
+# ======================
+# LOAD MODEL + DATA
+# ======================
+model = pickle.load(open('model.pkl', 'rb'))
+data = pd.read_csv('Train.csv')
+
+# ======================
+# 🎨 UI STYLE
+# ======================
 st.markdown("""
 <style>
-.main {
-    background-color: #f5f7fa;
+.stApp { background: linear-gradient(to right,#eef2f3,#ffffff); }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: white;
 }
-.big-title {
-    font-size: 42px;
-    font-weight: bold;
-    color: #2c3e50;
-}
+
+/* Titles */
+h1,h2,h3 { color:#0d47a1; }
+
+/* Cards */
 .card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    transition:0.3s;
+}
+.card:hover { transform: scale(1.05); }
+
+/* Buttons */
+.stButton>button {
+    background: linear-gradient(to right,#ff512f,#dd2476);
+    color:white;
+    border-radius:10px;
+    height:45px;
+    font-weight:bold;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {opacity:0;}
+    to {opacity:1;}
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- HEADER ----------------
-st.markdown('<div class="big-title">🛒 BigMart AI Dashboard</div>', unsafe_allow_html=True)
-st.write("Smart Sales Analysis & Insights System")
+# ======================
+# SESSION
+# ======================
+if "user" not in st.session_state:
+    st.session_state.user = None
+    st.session_state.role = None
 
-# ---------------- LOAD DATA ----------------
-@st.cache_data
-def load_data():
-    np.random.seed(42)
-    data = pd.DataFrame({
-        "Sales": np.random.randint(1000, 15000, 8500),
-        "Item_Type": np.random.choice(["Food", "Drinks", "Non-Consumable"], 8500),
-        "Outlet_Size": np.random.choice(["Small", "Medium", "High"], 8500),
-        "Outlet_Location": np.random.choice(["Tier 1", "Tier 2", "Tier 3"], 8500)
-    })
-    return data
+# ======================
+# AUTH FUNCTIONS
+# ======================
+def register_user(username, password, role):
+    hashed = hash_password(password)
+    c.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed, role))
+    conn.commit()
 
-df = load_data()
+def login_user(username, password):
+    hashed = hash_password(password)
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed))
+    return c.fetchone()
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.header("🔍 Filters")
+# ======================
+# LOGIN PAGE
+# ======================
+if st.session_state.user is None:
 
-item_type = st.sidebar.selectbox("Select Item Type", df["Item_Type"].unique())
-outlet_size = st.sidebar.selectbox("Select Outlet Size", df["Outlet_Size"].unique())
+    st.markdown("<h1 style='text-align:center;'>🔐 BigMart AI Login</h1>", unsafe_allow_html=True)
 
-filtered_df = df[
-    (df["Item_Type"] == item_type) &
-    (df["Outlet_Size"] == outlet_size)
-]
+    menu = st.radio("", ["Login", "Register"], horizontal=True)
 
-# ---------------- METRICS ----------------
-col1, col2, col3 = st.columns(3)
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
-with col1:
-    st.metric("📦 Total Records", len(filtered_df))
+    if menu == "Register":
+        role = st.selectbox("Role", ["user", "admin"])
 
-with col2:
-    st.metric("💰 Avg Sales", f"₹ {int(filtered_df['Sales'].mean())}")
+        if st.button("Register"):
+            if len(password) < 4:
+                st.warning("Password must be at least 4 characters")
+            else:
+                try:
+                    register_user(username, password, role)
+                    st.success("Account created!")
+                except:
+                    st.error("Username already exists")
 
-with col3:
-    st.metric("🔥 Max Sales", f"₹ {int(filtered_df['Sales'].max())}")
+    else:
+        if st.button("Login"):
+            user = login_user(username, password)
+            if user:
+                st.session_state.user = username
+                st.session_state.role = user[2]
 
-st.markdown("---")
+                c.execute("INSERT INTO login_logs VALUES (?, ?)",
+                          (username, str(datetime.now())))
+                conn.commit()
 
-# ---------------- CHART 1 ----------------
-st.subheader("📈 Sales Distribution")
+                st.success("Login successful")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
-fig1, ax1 = plt.subplots()
-ax1.hist(filtered_df["Sales"], bins=25)
-ax1.set_title("Sales Distribution")
-ax1.set_xlabel("Sales")
-ax1.set_ylabel("Frequency")
+# ======================
+# MAIN APP
+# ======================
+else:
 
-st.pyplot(fig1)   # ✅ No recursion issue
+    st.sidebar.write(f"👤 {st.session_state.user}")
+    st.sidebar.write(f"Role: {st.session_state.role}")
 
-# ---------------- CHART 2 ----------------
-st.subheader("📊 Avg Sales by Item Type")
+    if st.sidebar.button("Logout"):
+        st.session_state.user = None
+        st.rerun()
 
-avg_sales = df.groupby("Item_Type")["Sales"].mean()
+    pages = ["Home", "Dashboard", "Prediction", "History"]
+    if st.session_state.role == "admin":
+        pages.append("Admin Panel")
 
-fig2, ax2 = plt.subplots()
-avg_sales.plot(kind="bar", ax=ax2)
-ax2.set_title("Average Sales by Item Type")
+    page = st.sidebar.radio("Navigation", pages)
 
-st.pyplot(fig2)   # ✅ Safe
+    # ======================
+    # 🏠 HOME
+    # ======================
+    if page == "Home":
 
-# ---------------- STREAMLIT CHART ----------------
-st.subheader("⚡ Sales Trend (Fast Chart)")
-st.line_chart(filtered_df["Sales"].head(50))
+        st.markdown("<h1 style='text-align:center;'>🛒 BigMart AI Platform</h1>", unsafe_allow_html=True)
 
-# ---------------- EXTRA INSIGHT ----------------
-st.subheader("📍 Sales by Outlet Location")
+        st.image("https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif")
 
-location_sales = df.groupby("Outlet_Location")["Sales"].mean()
+        st.markdown("## 📌 About")
+        st.write("""
+        This system predicts retail sales using Machine Learning. It helps businesses 
+        optimize pricing, inventory, and decision-making.
+        """)
 
-fig3, ax3 = plt.subplots()
-location_sales.plot(kind="pie", autopct='%1.1f%%', ax=ax3)
+        col1, col2, col3 = st.columns(3)
 
-st.pyplot(fig3)
+        col1.markdown("<div class='card'><h3>📊 Analytics</h3></div>", unsafe_allow_html=True)
+        col2.markdown("<div class='card'><h3>🤖 Prediction</h3></div>", unsafe_allow_html=True)
+        col3.markdown("<div class='card'><h3>🔐 Secure</h3></div>", unsafe_allow_html=True)
 
-# ---------------- DATA TABLE ----------------
-st.subheader("📋 Filtered Data Preview")
-st.dataframe(filtered_df.head(20))
+    # ======================
+    # DASHBOARD
+    # ======================
+    elif page == "Dashboard":
 
-# ---------------- FOOTER ----------------
-st.markdown("---")
-st.markdown("🚀 Built with ❤️ using Streamlit | BigMart AI System")
+        st.title("📊 Dashboard")
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Records", len(data))
+        col2.metric("Avg Sales", f"₹ {data['Item_Outlet_Sales'].mean():.0f}")
+        col3.metric("Max Sales", f"₹ {data['Item_Outlet_Sales'].max():.0f}")
+
+        fig, ax = plt.subplots()
+        ax.hist(data['Item_Outlet_Sales'], bins=30)
+        st.pyplot(fig)
+
+    # ======================
+    # PREDICTION
+    # ======================
+    elif page == "Prediction":
+
+        st.title("🤖 Prediction")
+
+        item_weight = st.slider("Weight", 0.0, 25.0, 10.0)
+        item_visibility = st.slider("Visibility", 0.0, 0.5, 0.1)
+        item_mrp = st.slider("MRP", 50.0, 300.0, 150.0)
+
+        if st.button("Predict"):
+            with st.spinner("Processing..."):
+                time.sleep(1)
+
+                input_data = np.array([[0,item_weight,0,item_visibility,0,item_mrp,0,2000,0,0,0]])
+                prediction = model.predict(input_data)[0]
+
+                c.execute("INSERT INTO predictions VALUES (?, ?, ?, ?, ?)",
+                          (st.session_state.user, item_mrp, item_weight,
+                           prediction, str(datetime.now())))
+                conn.commit()
+
+                st.success(f"💰 ₹ {prediction:.2f}")
+
+    # ======================
+    # HISTORY
+    # ======================
+    elif page == "History":
+
+        st.title("📜 History")
+
+        df = pd.read_sql(f"SELECT * FROM predictions WHERE username='{st.session_state.user}'", conn)
+        st.dataframe(df)
+
+    # ======================
+    # ADMIN PANEL
+    # ======================
+    elif page == "Admin Panel":
+
+        st.title("👨‍💼 Admin Panel")
+
+        tab1, tab2, tab3 = st.tabs(["Users","Predictions","Logins"])
+
+        with tab1:
+            st.dataframe(pd.read_sql("SELECT * FROM users", conn))
+
+        with tab2:
+            st.dataframe(pd.read_sql("SELECT * FROM predictions", conn))
+
+        with tab3:
+            st.dataframe(pd.read_sql("SELECT * FROM login_logs", conn))
